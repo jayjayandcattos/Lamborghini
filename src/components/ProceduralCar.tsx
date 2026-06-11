@@ -7,13 +7,61 @@ interface CarModelProps {
   modelId: string;
   color: string;
   cameraView: string;
+  scale?: number;
+  position?: [number, number, number];
 }
 
-function GLTFAsset({ url, color }: { url: string; color: string }) {
+function GLTFAsset({ 
+  url, 
+  color, 
+  modelId, 
+  customScale, 
+  customPosition 
+}: { 
+  url: string; 
+  color: string; 
+  modelId: string;
+  customScale?: number;
+  customPosition?: [number, number, number];
+}) {
   const { scene } = useGLTF(url);
   const colorObj = useMemo(() => new THREE.Color(color), [color]);
+  const [scale, setScale] = useState<number>(1.0);
+  const [position, setPosition] = useState<[number, number, number]>([0, 0, 0]);
 
   useEffect(() => {
+    if (!scene) return;
+
+    // 1. Calculate bounding box of the loaded scene
+    const box = new THREE.Box3().setFromObject(scene);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const center = new THREE.Vector3();
+    box.getCenter(center);
+
+    // 2. Scale factor
+    // Default sports cars target around 4.6m length. Urus SUV targets around 5.1m.
+    const targetLength = modelId === 'urus' ? 5.1 : 4.6;
+    const maxDim = Math.max(size.x, size.y, size.z);
+    
+    let factor = targetLength / (maxDim || 1);
+    if (customScale !== undefined) {
+      factor = customScale;
+    }
+    setScale(factor);
+
+    // 3. Position offset to ground the wheels (y=0) and center the model (x=0, z=0)
+    let offset: [number, number, number] = [
+      -center.x * factor,
+      -box.min.y * factor,
+      -center.z * factor
+    ];
+    if (customPosition !== undefined) {
+      offset = customPosition;
+    }
+    setPosition(offset);
+
+    // 4. Paint materials
     scene.traverse((child: any) => {
       if (child.isMesh) {
         child.castShadow = true;
@@ -40,12 +88,12 @@ function GLTFAsset({ url, color }: { url: string; color: string }) {
         }
       }
     });
-  }, [scene, colorObj]);
+  }, [scene, colorObj, modelId, customScale, customPosition]);
 
-  return <primitive object={scene} scale={1.0} position={[0, 0, 0]} />;
+  return <primitive object={scene} scale={scale} position={position} />;
 }
 
-export function CarModel({ modelId, color, cameraView }: CarModelProps) {
+export function CarModel({ modelId, color, cameraView, scale, position }: CarModelProps) {
   const groupRef = useRef<THREE.Group>(null);
   const curLookAt = useRef(new THREE.Vector3(0, 0.4, 0));
   const orbitRef = useRef<any>(null);
@@ -154,7 +202,13 @@ export function CarModel({ modelId, color, cameraView }: CarModelProps) {
               <meshBasicMaterial color="#FFB300" wireframe />
             </mesh>
           }>
-            <GLTFAsset url={`/models/${modelId}.glb`} color={color} />
+            <GLTFAsset 
+              url={`/models/${modelId}.glb`} 
+              color={color} 
+              modelId={modelId}
+              customScale={scale}
+              customPosition={position}
+            />
           </Suspense>
         </group>
       ) : (

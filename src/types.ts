@@ -5,6 +5,8 @@ export interface BrandModel {
   zeroToSixty: string;
   topSpeed: string;
   modelUrl: string;
+  scale?: number;
+  position?: [number, number, number];
 }
 
 export interface BrandColor {

@@ -7,9 +7,10 @@ import { CarModel } from './components/ProceduralCar';
 import { BrandModel, BrandColor, CameraView } from './types';
 
 const modelsData: BrandModel[] = [
-  { id: "revuelto", name: "REVUELTO", hp: "1001 CV", zeroToSixty: "2.5s", topSpeed: "350 km/h", modelUrl: "/models/revuelto.glb" },
-  { id: "huracan", name: "HURACÁN STO", hp: "640 CV", zeroToSixty: "3.0s", topSpeed: "310 km/h", modelUrl: "/models/huracan.glb" },
-  { id: "aventador", name: "AVENTADOR SVJ", hp: "770 CV", zeroToSixty: "2.8s", topSpeed: "350 km/h", modelUrl: "/models/aventador.glb" }
+  { id: "aventador", name: "AVENTADOR SVJ", hp: "770 CV", zeroToSixty: "2.9s", topSpeed: "350 km/h", modelUrl: "/models/aventador.glb" },
+  { id: "huracan", name: "HURACÁN GT", hp: "640 CV", zeroToSixty: "3.0s", topSpeed: "310 km/h", modelUrl: "/models/huracan.glb" },
+  { id: "gallardo", name: "GALLARDO SPYDER", hp: "560 CV", zeroToSixty: "3.7s", topSpeed: "325 km/h", modelUrl: "/models/gallardo.glb" },
+  { id: "urus", name: "URUS SUPER SUV", hp: "650 CV", zeroToSixty: "3.6s", topSpeed: "305 km/h", modelUrl: "/models/urus.glb" }
 ];
 
 const colorsData: BrandColor[] = [
@@ -125,6 +126,8 @@ export default function App() {
             modelId={currentModel.id} 
             color={activeColor} 
             cameraView={cameraView} 
+            scale={currentModel.scale}
+            position={currentModel.position}
           />
 
           {/* Realistic soft ground shadows */}
@@ -288,16 +291,24 @@ export default function App() {
 
             {/* Linear outline secondary typography background */}
             <h2 className="text-[2.2rem] sm:text-[3rem] md:text-[4.5rem] font-display font-bold tracking-tight text-outline pointer-events-none mt-1 opacity-70">
-              {currentModel.name === 'REVUELTO' ? 'LB744 COUPE' : currentModel.name === 'HURACÁN STO' ? 'SUPER TROFEO' : 'SVJ APEX'}
+              {currentModel.id === 'aventador' 
+                ? 'SVJ 63 ROADSTER' 
+                : currentModel.id === 'huracan' 
+                ? 'LB SILHOUETTE GT' 
+                : currentModel.id === 'gallardo' 
+                ? 'LP 560-4 SPYDER' 
+                : 'URUS PERFORMANCE'}
             </h2>
 
             {/* Brief engineering description */}
             <p className="max-w-md text-left font-sans text-xs text-gray-400 mt-4 leading-relaxed font-light hidden sm:block">
-              {currentModel.id === 'revuelto' 
-                ? 'The first super sports V12 hybrid plug-in HPEV (High Performance Electrified Vehicle) that establishes a new paradigm in terms of performance, sportiness and pleasure.'
+              {currentModel.id === 'aventador' 
+                ? 'Combining groundbreaking aerodynamics, active systems, exceptional track presence, and the raw heart of natural aspiration.'
                 : currentModel.id === 'huracan'
-                ? 'A road-homologated super sports car inspired by the racing heritage of Lamborghini Squadra Corse. Maximum aerodynamics and racing sensations.'
-                : 'Combining groundbreaking aerodynamics, active systems, exceptional track presence, and the raw heart of natural aspiration.'
+                ? 'A super sports car inspired by the racing heritage of Lamborghini Squadra Corse. Maximum aerodynamics and racing sensations.'
+                : 'id' in currentModel && currentModel.id === 'gallardo'
+                ? 'A gorgeous open-top spyder featuring a powerful naturally aspirated V10 and a timeless, sharp Italian design.'
+                : 'The ultimate super sports utility vehicle, blending the soul of a supercar with the functionality of an SUV.'
               }
             </p>
 
