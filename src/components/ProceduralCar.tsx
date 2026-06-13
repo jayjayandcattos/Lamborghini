@@ -9,38 +9,48 @@ interface CarModelProps {
   cameraView: string;
   scale?: number;
   position?: [number, number, number];
+  onInteractionChange?: (isInteracting: boolean) => void;
 }
 
 function GLTFAsset({ 
   url, 
-  color, 
   modelId, 
   customScale, 
   customPosition 
 }: { 
   url: string; 
-  color: string; 
   modelId: string;
   customScale?: number;
   customPosition?: [number, number, number];
 }) {
-  const { scene } = useGLTF(url);
-  const colorObj = useMemo(() => new THREE.Color(color), [color]);
-  const [scale, setScale] = useState<number>(1.0);
-  const [position, setPosition] = useState<[number, number, number]>([0, 0, 0]);
+  const { scene: originalScene } = useGLTF(url);
+  
+  // Clone the scene to avoid mutating the cached original
+  const scene = useMemo(() => {
+    const cloned = originalScene.clone(true);
+    // Deep clone materials so each instance is independent
+    cloned.traverse((child: any) => {
+      if (child.isMesh && child.material) {
+        child.material = child.material.clone();
+      }
+    });
+    return cloned;
+  }, [originalScene]);
+
+  const [computedScale, setComputedScale] = useState<number>(1.0);
+  const [computedPosition, setComputedPosition] = useState<[number, number, number]>([0, 0, 0]);
 
   useEffect(() => {
-    if (!scene) return;
+    if (!scene || !originalScene) return;
 
-    // 1. Calculate bounding box of the loaded scene
-    const box = new THREE.Box3().setFromObject(scene);
+    // 1. Calculate bounding box of the original untransformed scene
+    const box = new THREE.Box3().setFromObject(originalScene);
     const size = new THREE.Vector3();
     box.getSize(size);
     const center = new THREE.Vector3();
     box.getCenter(center);
 
-    // 2. Scale factor
-    // Default sports cars target around 4.6m length. Urus SUV targets around 5.1m.
+    // 2. Scale factor — target real-world car lengths in meters
     const targetLength = modelId === 'urus' ? 5.1 : 4.6;
     const maxDim = Math.max(size.x, size.y, size.z);
     
@@ -48,9 +58,9 @@ function GLTFAsset({
     if (customScale !== undefined) {
       factor = customScale;
     }
-    setScale(factor);
+    setComputedScale(factor);
 
-    // 3. Position offset to ground the wheels (y=0) and center the model (x=0, z=0)
+    // 3. Position offset to ground the wheels (y=0) and center the model
     let offset: [number, number, number] = [
       -center.x * factor,
       -box.min.y * factor,
@@ -59,41 +69,53 @@ function GLTFAsset({
     if (customPosition !== undefined) {
       offset = customPosition;
     }
-    setPosition(offset);
+    setComputedPosition(offset);
 
-    // 4. Paint materials
+    // 4. Enable shadows on all meshes
     scene.traverse((child: any) => {
       if (child.isMesh) {
         child.castShadow = true;
         child.receiveShadow = true;
-        
-        if (child.material) {
-          const matName = (child.material.name || '').toLowerCase();
-          const nodeName = (child.name || '').toLowerCase();
-          
-          if (
-            matName.includes('paint') ||
-            matName.includes('body') ||
-            matName.includes('car_paint') ||
-            matName.includes('exterior') ||
-            nodeName.includes('body') ||
-            nodeName.includes('paint')
-          ) {
-            child.material = child.material.clone();
-            child.material.color = colorObj;
-            if ('roughness' in child.material) child.material.roughness = 0.15;
-            if ('metalness' in child.material) child.material.metalness = 0.9;
-            if ('clearcoat' in child.material) child.material.clearcoat = 1.0;
-          }
-        }
       }
     });
-  }, [scene, colorObj, modelId, customScale, customPosition]);
+  }, [scene, originalScene, modelId, customScale, customPosition]);
 
-  return <primitive object={scene} scale={scale} position={position} />;
+  const assetRef = useRef<THREE.Group>(null);
+  const animProgress = useRef(0);
+
+  useEffect(() => {
+    animProgress.current = 0;
+    if (assetRef.current) {
+      assetRef.current.scale.set(0, 0, 0);
+      assetRef.current.position.set(0, -1.0, 0);
+      assetRef.current.rotation.set(0, -Math.PI, 0);
+    }
+  }, [computedScale, computedPosition]);
+
+  useFrame(() => {
+    if (!assetRef.current) return;
+
+    animProgress.current = THREE.MathUtils.lerp(animProgress.current, 1, 0.04);
+    
+    const currentScale = animProgress.current * computedScale;
+    assetRef.current.scale.set(currentScale, currentScale, currentScale);
+
+    const startY = computedPosition[1] - 1.0;
+    assetRef.current.position.y = THREE.MathUtils.lerp(startY, computedPosition[1], animProgress.current);
+    assetRef.current.position.x = computedPosition[0];
+    assetRef.current.position.z = computedPosition[2];
+
+    assetRef.current.rotation.y = THREE.MathUtils.lerp(-Math.PI, 0, animProgress.current);
+  });
+
+  return (
+    <group ref={assetRef}>
+      <primitive key={url} object={scene} />
+    </group>
+  );
 }
 
-export function CarModel({ modelId, color, cameraView, scale, position }: CarModelProps) {
+export function CarModel({ modelId, color, cameraView, scale, position, onInteractionChange }: CarModelProps) {
   const groupRef = useRef<THREE.Group>(null);
   const curLookAt = useRef(new THREE.Vector3(0, 0.4, 0));
   const orbitRef = useRef<any>(null);
@@ -121,7 +143,8 @@ export function CarModel({ modelId, color, cameraView, scale, position }: CarMod
   // Trigger camera reset animation whenever perspective changes
   useEffect(() => {
     shouldLerpRef.current = true;
-  }, [cameraView, modelId]);
+    onInteractionChange?.(true); // Fade out surrounding UI while camera animates
+  }, [cameraView, modelId, onInteractionChange]);
 
   // Camera lerping logic is run on every frame
   useFrame((state) => {
@@ -167,6 +190,23 @@ export function CarModel({ modelId, color, cameraView, scale, position }: CarMod
         curLookAt.current.lerp(targetL, 0.05);
         state.camera.lookAt(curLookAt.current);
       }
+
+      // Check distance to target to end the transition cleanly and fade back in
+      const dx = state.camera.position.x - targetPos[0];
+      const dy = state.camera.position.y - targetPos[1];
+      const dz = state.camera.position.z - targetPos[2];
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      
+      if (dist < 0.04) {
+        shouldLerpRef.current = false;
+        // Snap directly to final positions to prevent infinite micro-lerping
+        state.camera.position.set(targetPos[0], targetPos[1], targetPos[2]);
+        if (orbitRef.current) {
+          orbitRef.current.target.set(targetLookAt[0], targetLookAt[1], targetLookAt[2]);
+          orbitRef.current.update();
+        }
+        onInteractionChange?.(false); // Fade surrounding UI back in!
+      }
     }
   });
 
@@ -203,8 +243,8 @@ export function CarModel({ modelId, color, cameraView, scale, position }: CarMod
             </mesh>
           }>
             <GLTFAsset 
+              key={modelId}
               url={`/models/${modelId}.glb`} 
-              color={color} 
               modelId={modelId}
               customScale={scale}
               customPosition={position}
@@ -684,6 +724,10 @@ export function CarModel({ modelId, color, cameraView, scale, position }: CarMod
         maxDistance={11}
         onStart={() => {
           shouldLerpRef.current = false;
+          onInteractionChange?.(true);
+        }}
+        onEnd={() => {
+          onInteractionChange?.(false);
         }}
       />
     </>
