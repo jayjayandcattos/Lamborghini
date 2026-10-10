@@ -6,6 +6,7 @@ export interface BrandModel {
   hp: string;
   acceleration: string;
   topSpeed: string;
+  accent: string;
 }
 
-export type CameraView = 'front-3/4' | 'side' | 'engine' | 'interior';
+export type CameraView = 'front-3/4' | 'side' | 'engine' | 'interior' | 'city';

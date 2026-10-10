@@ -9,6 +9,7 @@ export const modelsData: BrandModel[] = [
     hp: '770 CV',
     acceleration: '2.9s',
     topSpeed: '350 km/h',
+    accent: '#FFB300',
   },
   {
     id: 'huracan',
@@ -18,6 +19,7 @@ export const modelsData: BrandModel[] = [
     hp: '640 CV',
     acceleration: '3.0s',
     topSpeed: '310 km/h',
+    accent: '#39D0D8',
   },
   {
     id: 'gallardo',
@@ -27,6 +29,7 @@ export const modelsData: BrandModel[] = [
     hp: '560 CV',
     acceleration: '3.7s',
     topSpeed: '325 km/h',
+    accent: '#FF4D2E',
   },
   {
     id: 'urus',
@@ -36,5 +39,6 @@ export const modelsData: BrandModel[] = [
     hp: '650 CV',
     acceleration: '3.6s',
     topSpeed: '305 km/h',
+    accent: '#7C8CFF',
   },
 ];
