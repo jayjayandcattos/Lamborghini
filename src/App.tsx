@@ -10,7 +10,7 @@ import { ContactShadows, Environment, Lightformer } from '@react-three/drei';
 import { motion, AnimatePresence, useMotionValue, useSpring } from 'motion/react';
 import { ArrowUpRight, Hand } from 'lucide-react';
 import { CarModel } from './components/CarModel';
-import { CityScene } from './components/CityScene';
+import { Atmosphere } from './components/Atmosphere';
 import { ShieldLogo } from './components/ShieldLogo';
 import { AnimatedNumber } from './components/AnimatedNumber';
 import { modelsData } from './data/models';
@@ -25,7 +25,17 @@ const CAMERA_VIEWS: { id: CameraView; label: string }[] = [
   { id: 'side', label: 'PROFILE' },
   { id: 'engine', label: 'REAR' },
   { id: 'interior', label: 'DETAILS' },
-  { id: 'city', label: 'CITY DRIVE' },
+];
+
+const GRAIN =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E\")";
+
+const TICKER_ITEMS = [
+  'Automobili Lamborghini',
+  'Configuratore',
+  'V12 Power',
+  'Squadra Corse',
+  'Sant’Agata',
 ];
 
 const heroVariants = {
@@ -151,7 +161,6 @@ export default function App() {
   const words = currentModel.name.split(' ');
   const pad = (n: number) => String(n).padStart(2, '0');
   const accentStyle = { '--accent': currentModel.accent } as CSSProperties;
-  const isCity = cameraView === 'city';
 
   const handleLoaded = useCallback(() => setIsLoaded(true), []);
 
@@ -210,8 +219,8 @@ export default function App() {
           className="absolute -bottom-32 -right-16 w-[620px] h-[620px] rounded-full blur-[180px]"
           style={{
             backgroundColor: 'var(--accent)',
-            opacity: isCity ? 0.02 : 0.06,
-            transition: 'background-color 700ms linear, opacity 900ms linear',
+            opacity: 0.06,
+            transition: 'background-color 700ms linear',
           }}
         />
         <div
@@ -246,7 +255,7 @@ export default function App() {
           />
           <directionalLight position={[5, 3, 5]} intensity={1.5} />
           <directionalLight position={[-5, 3, -5]} intensity={0.5} />
-          <CityScene active={isCity} color={currentModel.accent} />
+          <Atmosphere color={currentModel.accent} />
           <CarModel
             modelId={currentModel.id}
             color={currentModel.accent}
@@ -259,7 +268,7 @@ export default function App() {
             resolution={512}
             scale={10}
             blur={2}
-            opacity={isCity ? 0.3 : 0.55}
+            opacity={0.55}
             far={10}
             position={[0, -0.01, 0]}
           />
@@ -267,6 +276,40 @@ export default function App() {
       </div>
 
       <div className="pointer-events-none absolute inset-y-0 left-0 hidden w-[48%] bg-gradient-to-r from-black/55 via-black/15 to-transparent lg:block" />
+
+      {!reduced && (
+        <>
+          <div
+            className="pointer-events-none absolute inset-0 z-[5] opacity-[0.05] mix-blend-overlay"
+            style={{ backgroundImage: GRAIN, backgroundSize: '220px 220px', animation: 'grain-shift 0.7s steps(4) infinite' }}
+          />
+          <div
+            className="pointer-events-none absolute inset-0 z-[5] opacity-[0.35]"
+            style={{
+              backgroundImage:
+                'repeating-linear-gradient(to bottom, rgba(255,255,255,0.035) 0px, rgba(255,255,255,0.035) 1px, transparent 1px, transparent 3px)',
+            }}
+          />
+        </>
+      )}
+
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[6] overflow-hidden border-t border-white/5 bg-black/20 py-2 backdrop-blur-[2px]">
+        <div
+          className="flex w-max gap-8 whitespace-nowrap font-mono text-[8px] tracking-[0.35em] text-gray-600 uppercase"
+          style={{ animation: reduced ? undefined : 'marquee-scroll 32s linear infinite' }}
+        >
+          {[0, 1].map((copy) => (
+            <div key={copy} className="flex gap-8">
+              {TICKER_ITEMS.map((item) => (
+                <span key={item} className="flex items-center gap-8">
+                  {item}
+                  <span className="text-[var(--accent)]">◆</span>
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
 
       <motion.div
         className="pointer-events-none absolute bottom-6 left-1/2 hidden -translate-x-1/2 items-center gap-2 font-mono text-[8px] tracking-[0.3em] text-gray-600 uppercase lg:left-[58%] lg:flex"
@@ -277,7 +320,7 @@ export default function App() {
         Drag to orbit
       </motion.div>
 
-      <div className="pointer-events-none relative z-10 flex h-full flex-col p-5 md:p-8">
+      <div className="pointer-events-none relative z-10 flex h-full flex-col p-5 pb-12 md:p-8 md:pb-12">
         <motion.header
           initial={{ opacity: 0, y: -18 }}
           animate={isLoaded ? { opacity: 1, y: 0 } : {}}
@@ -299,7 +342,7 @@ export default function App() {
             <span className="hidden md:block font-mono text-[9px] tracking-[0.35em] text-gray-500 uppercase">
              stantia Configuratio
             </span>
-            <button className="group flex items-center gap-2 bg-[var(--accent)] hover:bg-white transition-colors duration-300 text-black font-mono text-[10px] font-bold tracking-[0.2em] uppercase px-5 py-2.5 cursor-pointer">
+            <button className="shine group relative flex items-center gap-2 overflow-hidden bg-[var(--accent)] hover:bg-white transition-colors duration-300 text-black font-mono text-[10px] font-bold tracking-[0.2em] uppercase px-5 py-2.5 cursor-pointer">
               Configure Yours
               <ArrowUpRight
                 size={13}

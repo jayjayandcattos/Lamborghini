@@ -9,4 +9,4 @@ export interface BrandModel {
   accent: string;
 }
 
-export type CameraView = 'front-3/4' | 'side' | 'engine' | 'interior' | 'city';
+export type CameraView = 'front-3/4' | 'side' | 'engine' | 'interior';

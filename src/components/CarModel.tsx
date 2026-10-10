@@ -9,7 +9,7 @@ import type { CameraView } from '../types';
 
 const TAU = Math.PI * 2;
 const HERO_VIEW = 'front-3/4';
-const CITY_VIEW = 'city';
+const BASE_FOV = 38;
 const MIN_RADIUS = 1.6;
 const MAX_RADIUS = 13;
 const ZOOM_SPEED = 0.16;
@@ -35,7 +35,6 @@ const CAMERA_VIEWS: Record<CameraView, { position: [number, number, number]; loo
   side: { position: [6.9, 0.55, 0.7], lookAt: [0, 0.4, 0] },
   engine: { position: [-3.4, 2.4, -4.9], lookAt: [0, 0.6, -0.5] },
   interior: { position: [0.55, 1.02, 0.4], lookAt: [0, 0.85, -1.6] },
-  city: { position: [3.4, 1.15, -6.2], lookAt: [0.3, 0.55, 7] },
 };
 
 interface CarModelProps {
@@ -329,18 +328,25 @@ export function CarModel({ modelId, color, cameraView, onInteractionChange }: Ca
     }
 
     const isHero = cameraView === HERO_VIEW;
-    const isCity = cameraView === CITY_VIEW;
 
     if (isHero && !dragging.current && idleFor.current > 1.4) {
       angle.current += delta * 0.13;
-    } else if (!isHero && !isCity) {
+    } else {
       angle.current = dampAngle(angle.current, 0, 2.2, delta);
     }
 
     g.rotation.y = angle.current;
-    g.position.y = Math.sin(t * 0.55) * 0.022 + (isCity ? Math.sin(t * 2.4) * 0.004 : 0);
+    g.position.y = Math.sin(t * 0.55) * 0.022;
     g.rotation.z = Math.sin(t * 0.37) * 0.007;
     g.rotation.x = Math.sin(t * 0.29 + 1.2) * 0.005;
+
+    const perspective = cam as THREE.PerspectiveCamera;
+    const settling = isHero && idleFor.current > 1.4;
+    const targetFov = settling ? BASE_FOV + Math.sin(t * 0.28) * 0.9 : BASE_FOV;
+    if (Math.abs(perspective.fov - targetFov) > 0.002) {
+      perspective.fov = THREE.MathUtils.damp(perspective.fov, targetFov, 2, delta);
+      perspective.updateProjectionMatrix();
+    }
 
     const idleBoost = idleFor.current > 1.4 ? 1 : 0;
     const flash = Math.max(0, 1 - (t - introStart.current) / 1.2) ** 2;
