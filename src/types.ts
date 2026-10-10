@@ -1,17 +1,11 @@
 export interface BrandModel {
   id: string;
   name: string;
+  variant: string;
+  description: string;
   hp: string;
-  zeroToSixty: string;
+  acceleration: string;
   topSpeed: string;
-  modelUrl: string;
-  scale?: number;
-  position?: [number, number, number];
-}
-
-export interface BrandColor {
-  name: string;
-  hex: string;
 }
 
 export type CameraView = 'front-3/4' | 'side' | 'engine' | 'interior';

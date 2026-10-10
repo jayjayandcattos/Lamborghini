@@ -1,138 +1,96 @@
 import { useState, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { Environment, ContactShadows } from '@react-three/drei';
+import { ContactShadows, Environment, Lightformer } from '@react-three/drei';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronLeft, ChevronRight, Menu, X, ArrowUpRight } from 'lucide-react';
-import { CarModel } from './components/ProceduralCar';
-import { BrandModel, CameraView } from './types';
+import { ChevronLeft, ChevronRight, ArrowUpRight } from 'lucide-react';
+import { CarModel } from './components/CarModel';
+import { ShieldLogo } from './components/ShieldLogo';
+import { modelsData } from './data/models';
+import type { CameraView } from './types';
 
-const modelsData: BrandModel[] = [
-  { id: "aventador", name: "AVENTADOR SVJ", hp: "770 CV", zeroToSixty: "2.9s", topSpeed: "350 km/h", modelUrl: "/models/aventador.glb" },
-  { id: "huracan", name: "HURACÁN GT", hp: "640 CV", zeroToSixty: "3.0s", topSpeed: "310 km/h", modelUrl: "/models/huracan.glb" },
-  { id: "gallardo", name: "GALLARDO SPYDER", hp: "560 CV", zeroToSixty: "3.7s", topSpeed: "325 km/h", modelUrl: "/models/gallardo.glb" },
-  { id: "urus", name: "URUS SUPER SUV", hp: "650 CV", zeroToSixty: "3.6s", topSpeed: "305 km/h", modelUrl: "/models/urus.glb" }
+const EASE = [0.25, 1, 0.5, 1] as const;
+
+const CAMERA_VIEWS: { id: CameraView; label: string }[] = [
+  { id: 'front-3/4', label: 'FRONT' },
+  { id: 'side', label: 'PROFILE' },
+  { id: 'engine', label: 'REAR' },
+  { id: 'interior', label: 'DETAILS' },
 ];
 
-
-// Animation variants requested in specification
-const uiFadeIn = {
-  initial: { opacity: 0, x: -30 },
-  animate: { opacity: 1, x: 0, transition: { duration: 0.8, ease: [0.25, 1, 0.5, 1] as const } }
-};
-
-const statsStagger = {
-  initial: { opacity: 0, y: 20 },
-  animate: { opacity: 1, y: 0, transition: { staggerChildren: 0.1, delayChildren: 0.5 } }
-};
+function Stat({ label, value, sub }: { label: string; value: string; sub: string }) {
+  return (
+    <div className="flex flex-col items-start min-w-[96px]">
+      <span className="font-mono text-[9px] tracking-[0.25em] text-gray-500 uppercase mb-1.5">{label}</span>
+      <span className="font-display text-xl md:text-2xl font-medium text-white tracking-tight">{value}</span>
+      <span className="font-mono text-[8px] tracking-[0.2em] text-lambo-yellow/70 mt-1">{sub}</span>
+    </div>
+  );
+}
 
 export default function App() {
-  const [activeModel, setActiveModel] = useState<number>(0);
+  const [activeModel, setActiveModel] = useState(0);
   const [cameraView, setCameraView] = useState<CameraView>('front-3/4');
-  const [isLoaded, setIsLoaded] = useState<boolean>(false);
-  const [activeMenuTab, setActiveMenuTab] = useState<string>('Models');
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
-  const [isInteracting, setIsInteracting] = useState<boolean>(false);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [isInteracting, setIsInteracting] = useState(false);
 
-  // Trigger app entry animation shortly after mount
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoaded(true);
-    }, 1200);
+    const timer = setTimeout(() => setIsLoaded(true), 1200);
     return () => clearTimeout(timer);
   }, []);
 
   const currentModel = modelsData[activeModel];
-
-  // Cycles through models sequentially
-  const handleNextModel = () => {
-    setActiveModel((prev) => (prev + 1) % modelsData.length);
-  };
-
-  const handlePrevModel = () => {
-    setActiveModel((prev) => (prev - 1 + modelsData.length) % modelsData.length);
-  };
+  const pad = (n: number) => String(n).padStart(2, '0');
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-lambo-dark text-white select-none">
-      {/* INITIAL STARTUP SCREEN */}
+      {/* PRELOADER */}
       <AnimatePresence>
         {!isLoaded && (
           <motion.div
             key="preloader"
+            exit={{ opacity: 0, transition: { duration: 0.6, ease: EASE } }}
             className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black"
-            exit={{ opacity: 0, transition: { duration: 0.6, ease: [0.25, 1, 0.5, 1] } }}
           >
-            <div className="flex flex-col items-center gap-6">
-              {/* Premium Inline Gold Metallic Shield */}
-              <motion.div
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ duration: 0.8, delay: 0.1 }}
-                className="w-16 h-20"
-              >
-                <svg viewBox="0 0 100 120" className="w-full h-full" fill="none">
-                  <path d="M50 5 L90 25 L90 80 L50 115 L10 80 L10 25 Z" stroke="#FFB300" strokeWidth="4" fill="#050505" />
-                  <path d="M50 11 L84 28 L84 77 L50 107 L16 77 L16 28 Z" fill="#0A0A0A" />
-                  <path d="M50 35 L48 45 L40 50 L38 55 L45 53 L50 63 L55 53 L62 55 L60 50 L52 45 Z" fill="#FFB300" />
-                  <path d="M35 30 Q41 35 47 41 M65 30 Q59 35 53 41" stroke="#FFB300" strokeWidth="1.5" strokeLinecap="round" />
-                </svg>
-              </motion.div>
-              <div className="flex flex-col items-center gap-2">
-                <span className="text-[12px] font-mono tracking-[0.4em] text-lambo-yellow uppercase">
-                  AUTOMOBILI LAMBORGHINI
-                </span>
-                <span className="text-[9px] font-mono tracking-[0.2em] text-gray-500 uppercase">
-                  INITIALIZING CONFIGURATOR ENGINE
-                </span>
-              </div>
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.8, delay: 0.1 }}
+            >
+              <ShieldLogo className="w-14 h-[70px]" />
+            </motion.div>
+            <div className="flex flex-col items-center gap-2 mt-6">
+              <span className="font-mono text-[11px] tracking-[0.4em] text-lambo-yellow uppercase">
+                Automobili Lamborghini
+              </span>
+              <span className="font-mono text-[9px] tracking-[0.2em] text-gray-500 uppercase">
+                Initializing Configurator
+              </span>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* SECTION 1: 3D CANVAS UNDERLAY CONTAINER */}
-      <div 
-        id="canvas-container"
-        className="absolute inset-0 w-full h-screen z-0 bg-gradient-to-b from-[#020202] via-[#050505] to-[#0d0d0d] overflow-hidden"
-        style={{ pointerEvents: 'auto' }}
-      >
-        {/* Dynamic Ambient Background Elements */}
-        <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none select-none">
-          {/* Technical dot grid */}
-          <div 
-            className="absolute inset-0 opacity-[0.08]" 
+      {/* 3D SCENE */}
+      <div className="absolute inset-0 bg-gradient-to-b from-[#020202] via-[#050505] to-[#0d0d0d]">
+        <div className="absolute inset-0 pointer-events-none">
+          <div
+            className="absolute inset-0 opacity-[0.07]"
             style={{
               backgroundImage: 'radial-gradient(#FFB300 1.5px, transparent 1.5px)',
               backgroundSize: '40px 40px',
             }}
           />
-          {/* Slow moving ambient glowing light sources */}
           <motion.div
-            animate={{
-              x: [0, 80, -40, 0],
-              y: [0, -100, 60, 0],
-            }}
-            transition={{
-              duration: 20,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
+            animate={{ x: [0, 80, -40, 0], y: [0, -100, 60, 0] }}
+            transition={{ duration: 20, repeat: Infinity, ease: 'easeInOut' }}
             className="absolute -top-10 -left-10 w-[500px] h-[500px] rounded-full bg-lambo-yellow/[0.04] blur-[150px]"
           />
           <motion.div
-            animate={{
-              x: [0, -60, 90, 0],
-              y: [0, 80, -80, 0],
-            }}
-            transition={{
-              duration: 25,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
+            animate={{ x: [0, -60, 90, 0], y: [0, 80, -80, 0] }}
+            transition={{ duration: 25, repeat: Infinity, ease: 'easeInOut' }}
             className="absolute -bottom-20 -right-20 w-[600px] h-[600px] rounded-full bg-lambo-yellow/[0.03] blur-[180px]"
           />
-          {/* Center halo backdrop glow behind the car */}
-          <div 
+          <div
             className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[80vw] h-[80vh] rounded-full opacity-[0.05]"
             style={{
               background: 'radial-gradient(circle, #FFB300 0%, transparent 70%)',
@@ -140,333 +98,201 @@ export default function App() {
             }}
           />
         </div>
-        <Canvas shadows camera={{ position: [4.5, 1.8, 5.5], fov: 42 }}>
-          {/* Studio-calibre environmental reflections */}
-          <Environment preset="studio" environmentIntensity={0.8} />
 
-          {/* Key overhead spotlight defining the metallic paint highlights */}
+        <Canvas
+          shadows
+          dpr={[1, 1.5]}
+          camera={{ position: [4.5, 1.6, 5.2], fov: 42 }}
+          onCreated={(state) => {
+            state.gl.shadowMap.autoUpdate = false;
+            (window as any).__r3f = state;
+          }}
+        >
+          <Environment resolution={256} environmentIntensity={0.8}>
+            <Lightformer intensity={2} position={[0, 5, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[10, 10, 1]} color="#ffffff" />
+            <Lightformer intensity={1.5} position={[-5, 1, -1]} rotation={[0, Math.PI / 2, 0]} scale={[8, 2, 1]} color="#ffffff" />
+            <Lightformer intensity={1} position={[5, 1, 0]} rotation={[0, -Math.PI / 2, 0]} scale={[8, 2, 1]} color="#ffe9b0" />
+            <Lightformer intensity={0.5} position={[0, 2, 5]} scale={[6, 3, 1]} color="#ffffff" />
+          </Environment>
           <spotLight
             position={[0, 5, 0]}
             intensity={2}
-            color="#ffffff"
             angle={Math.PI / 4}
             penumbra={0.6}
             castShadow
             shadow-mapSize={[1024, 1024]}
           />
-
-          {/* Directional auxiliary lighting */}
           <directionalLight position={[5, 3, 5]} intensity={1.5} />
           <directionalLight position={[-5, 3, -5]} intensity={0.5} />
-
-          {/* Underlay Car Model Geometry */}
           <CarModel
             modelId={currentModel.id}
             color="#FFB300"
             cameraView={cameraView}
-            scale={currentModel.scale}
-            position={currentModel.position}
             onInteractionChange={setIsInteracting}
           />
-
-          {/* Realistic soft ground shadows */}
           <ContactShadows
-            resolution={1024}
+            key={currentModel.id}
+            frames={120}
+            resolution={512}
             scale={10}
             blur={2}
             opacity={0.55}
             far={10}
-            color="#000000"
             position={[0, -0.01, 0]}
           />
         </Canvas>
       </div>
 
-      {/* SECTION 2: GRAPHICAL USER INTERFACE OVERLAY */}
-      <div className="absolute inset-0 w-full h-screen flex flex-col pointer-events-none z-10 p-6 md:p-12">
-
-        {/* 2A. AUTOMOBILI HEADER */}
+      {/* UI OVERLAY */}
+      <div className="absolute inset-0 z-10 flex flex-col pointer-events-none p-6 md:p-10">
+        {/* HEADER */}
         <motion.header
-          initial={{ opacity: 0, y: -25 }}
-          animate={isLoaded ? { opacity: 1, y: 0 } : { opacity: 0, y: -25 }}
-          transition={{ duration: 1.0, ease: [0.25, 1, 0.5, 1], delay: 0.1 }}
-          className="w-full flex justify-between items-start pointer-events-none"
+          initial={{ opacity: 0, y: -20 }}
+          animate={isLoaded ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.8, ease: EASE, delay: 0.1 }}
+          className="flex items-center justify-between pointer-events-none"
         >
-          {/* Left Side: Solid Metallic Brand Shield */}
-          <div className="flex items-center gap-3 cursor-pointer pointer-events-auto">
-            <svg viewBox="0 0 100 120" className="w-8 h-10 fill-[#FFB300]" xmlns="http://www.w3.org/2000/svg">
-              <path d="M50 5 L90 25 L90 80 L50 115 L10 80 L10 25 Z" stroke="#FFB300" strokeWidth="4" fill="#050505" />
-              <path d="M50 11 L84 28 L84 77 L50 107 L16 77 L16 28 Z" fill="#050505" />
-              <path d="M50 35 L48 45 L40 50 L38 55 L45 53 L50 63 L55 53 L62 55 L60 50 L52 45 Z" fill="#FFB300" />
-              <path d="M35 30 Q41 35 47 41 M65 30 Q59 35 53 41" stroke="#FFB300" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-            <div className="hidden sm:flex flex-col text-left">
-              <span className="font-display text-[10px] tracking-widest text-white leading-tight">LAMBORGHINI</span>
-              <span className="font-mono text-[8px] text-gray-500 tracking-[0.3em] uppercase">STANTIA CONFIGURATIO</span>
+          <div className="flex items-center gap-3 pointer-events-auto cursor-pointer">
+            <ShieldLogo className="w-6 h-8" />
+            <div className="hidden sm:flex flex-col">
+              <span className="font-display text-[11px] tracking-[0.3em] text-white leading-tight">LAMBORGHINI</span>
+              <span className="font-mono text-[8px] text-gray-500 tracking-[0.3em] uppercase">Configurator</span>
             </div>
           </div>
-
-          {/* Right Side: Horizontal Navigation Menu */}
-          <nav className="hidden lg:flex gap-8 text-[11px] font-mono tracking-[0.2em] uppercase pt-2 pointer-events-auto">
-            <button
-              onClick={() => setActiveMenuTab('Models')}
-              className="transition-colors duration-300 relative py-1 cursor-pointer text-lambo-yellow font-bold"
-            >
-              Models
-              <motion.div
-                layoutId="activeNavIndicator"
-                className="absolute -bottom-1 left-0 right-0 h-[1.5px] bg-lambo-yellow"
-                transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+          <div className="flex items-center gap-5 pointer-events-auto">
+            <span className="hidden md:block font-mono text-[9px] tracking-[0.35em] text-gray-500 uppercase">
+              Stantia Configuratio
+            </span>
+            <button className="group flex items-center gap-2 bg-lambo-yellow hover:bg-white transition-colors duration-300 text-black font-mono text-[10px] font-bold tracking-[0.2em] uppercase px-5 py-2.5 cursor-pointer">
+              Configure Yours
+              <ArrowUpRight
+                size={13}
+                className="transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5"
               />
             </button>
-          </nav>
-
-          {/* Responsive Mobile Menu Button */}
-          <button
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="lg:hidden p-2 text-white hover:text-lambo-yellow cursor-pointer pointer-events-auto"
-          >
-            {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
+          </div>
         </motion.header>
 
-        {/* MOBILE NAVIGATION EXPANDED SLIDE-DOWN */}
-        <AnimatePresence>
-          {isMobileMenuOpen && (
+        {/* HERO */}
+        <div className="flex-1 flex items-center min-h-0">
+          <AnimatePresence mode="wait">
             <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="absolute left-6 right-6 top-24 bg-black/95 border border-gray-800 p-6 pointer-events-auto flex flex-col gap-4 z-40"
+              key={currentModel.id}
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: isInteracting ? 0 : 1, y: 0 }}
+              exit={{ opacity: 0, y: -24 }}
+              transition={{ duration: 0.5, ease: EASE }}
             >
-              <div className="text-[9px] font-mono tracking-widest text-gray-600 mb-1">NAV NAVIGATION</div>
-              <button
-                onClick={() => {
-                  setActiveMenuTab('Models');
-                  setIsMobileMenuOpen(false);
-                }}
-                className="w-full text-left font-mono py-2 text-[11px] tracking-[0.15em] uppercase flex justify-between items-center text-white"
-              >
-                <span className="text-lambo-yellow">Models</span>
-                <ArrowUpRight size={12} className="text-gray-700" />
-              </button>
+              <div className="flex items-center gap-3 mb-5">
+                <span className="font-mono text-[11px] tracking-[0.3em] text-lambo-yellow font-bold">
+                  {pad(activeModel + 1)}
+                </span>
+                <span className="h-px w-12 bg-lambo-yellow/60" />
+                <span className="font-mono text-[10px] tracking-[0.3em] text-gray-500 uppercase">
+                  Automobili Lamborghini
+                </span>
+              </div>
+              <h1 className="font-display font-bold text-[13vw] sm:text-7xl lg:text-8xl leading-[0.95] tracking-tighter text-white drop-shadow-[0_4px_24px_rgba(0,0,0,0.9)]">
+                {currentModel.name}
+              </h1>
+              <h2 className="font-display font-bold text-outline text-xl sm:text-3xl lg:text-4xl tracking-tight mt-3">
+                {currentModel.variant}
+              </h2>
+              <p className="max-w-md text-xs md:text-sm text-gray-400 mt-5 leading-relaxed font-light hidden sm:block">
+                {currentModel.description}
+              </p>
             </motion.div>
-          )}
-        </AnimatePresence>
+          </AnimatePresence>
+        </div>
 
-        {/* MODEL COMPENDIUM SUB-MENU OVERLAY */}
-        {activeMenuTab === 'Models' && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{
-              opacity: isInteracting ? 0 : 1,
-              y: 0,
-            }}
-            transition={{ duration: 0.4, ease: "easeInOut" }}
-            style={{ pointerEvents: 'none' }}
-            className="absolute top-24 left-1/2 -translate-x-1/2 pointer-events-none z-30 flex items-center gap-4 bg-black/85 border border-gray-800/80 px-6 py-3"
-          >
-            <span className="text-[9px] font-mono tracking-widest text-gray-500 uppercase mr-2 pointer-events-none">SERIES:</span>
-            {modelsData.map((m, index) => (
-              <button
-                key={m.id}
-                onClick={() => setActiveModel(index)}
-                style={{ pointerEvents: isInteracting ? 'none' : 'auto' }}
-                className={`text-[10px] font-mono tracking-[0.1em] px-3 py-1 cursor-pointer pointer-events-auto transition-colors ${activeModel === index
-                    ? 'bg-lambo-yellow text-black font-semibold'
-                    : 'text-gray-400 hover:text-white hover:bg-white/5'
-                  }`}
-              >
-                {m.name}
-              </button>
-            ))}
-          </motion.div>
-        )}
-
-        {/* 2B. MAIN MODEL DISPLAY TYPOGRAPHY (Left aligned, vertically centered) */}
-        <motion.div
+        {/* FOOTER */}
+        <motion.footer
           animate={{ opacity: isInteracting ? 0 : 1 }}
-          transition={{ duration: 0.4, ease: "easeInOut" }}
-          style={{ pointerEvents: 'none' }}
-          className="absolute left-6 md:left-12 top-1/2 -translate-y-1/2 z-10 pointer-events-none"
+          transition={{ duration: 0.4, ease: 'easeInOut' }}
+          className="flex flex-col md:flex-row md:items-end md:justify-between gap-5"
         >
           <AnimatePresence mode="wait">
             <motion.div
               key={currentModel.id}
-              variants={uiFadeIn}
-              initial="initial"
-              animate="animate"
-              exit={{ opacity: 0, x: 30, transition: { duration: 0.4 } }}
-              className="flex flex-col items-start select-none"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.35, ease: EASE }}
+              className="pointer-events-auto flex flex-wrap items-start gap-6 md:gap-8 bg-black/30 backdrop-blur-md border border-white/10 px-5 py-4"
             >
-              {/* Fine print metadata */}
-              <span className="text-[10px] font-mono tracking-[0.3em] text-gray-400 mb-4 uppercase">
-                AUTOMOBILI LAMBORGHINI
-              </span>
+              <Stat label="Power" value={currentModel.hp} sub="Combustion + Electric" />
+              <div className="w-px h-10 bg-white/10 self-center hidden sm:block" />
+              <Stat label="0-100 km/h" value={currentModel.acceleration} sub="Instant Torque" />
+              <div className="w-px h-10 bg-white/10 self-center hidden sm:block" />
+              <Stat label="Max Speed" value={`>${currentModel.topSpeed}`} sub="Electronic Limiter" />
+            </motion.div>
+          </AnimatePresence>
 
-              {/* Huge aggressive heading with drop-shadow and arrow cycling controls */}
-              <div className="relative group/title flex items-center">
-                {/* Previous model action zone */}
-                <button
-                  onClick={handlePrevModel}
-                  style={{ pointerEvents: isInteracting ? 'none' : 'auto' }}
-                  className="absolute -left-12 opacity-0 group-hover/title:opacity-100 group-hover/title:-left-10 transition-all duration-300 pointer-events-auto p-2 bg-black/40 hover:bg-lambo-yellow hover:text-black border border-gray-800 hover:border-lambo-yellow text-white flex items-center justify-center cursor-pointer"
-                  title="PREVIOUS MODEL"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-
-                <h1 className="text-[3.6rem] sm:text-[5rem] md:text-[6.8rem] lg:text-[7.6rem] font-display font-bold leading-none tracking-tighter text-white drop-shadow-[0_4px_24px_rgba(0,0,0,0.95)]">
-                  {currentModel.name}
-                </h1>
-
-                {/* Next model action zone */}
-                <button
-                  onClick={handleNextModel}
-                  style={{ pointerEvents: isInteracting ? 'none' : 'auto' }}
-                  className="absolute -right-12 opacity-0 group-hover/title:opacity-100 group-hover/title:-right-10 transition-all duration-300 pointer-events-auto p-2 bg-black/40 hover:bg-lambo-yellow hover:text-black border border-gray-800 hover:border-lambo-yellow text-white flex items-center justify-center cursor-pointer"
-                  title="NEXT MODEL"
-                >
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-
-              {/* Linear outline secondary typography background */}
-              <h2 className="text-[2.2rem] sm:text-[3rem] md:text-[4.5rem] font-display font-bold tracking-tight text-outline pointer-events-none mt-1">
-                {currentModel.id === 'aventador'
-                  ? 'SVJ 63 ROADSTER'
-                  : currentModel.id === 'huracan'
-                    ? 'LB SILHOUETTE GT'
-                    : currentModel.id === 'gallardo'
-                      ? 'LP 560-4 SPYDER'
-                      : 'URUS PERFORMANCE'}
-              </h2>
-
-              {/* Brief engineering description */}
-              <p className="max-w-md text-left font-sans text-xs text-gray-400 mt-4 leading-relaxed font-light hidden sm:block">
-                {currentModel.id === 'aventador'
-                  ? 'Combining groundbreaking aerodynamics, active systems, exceptional track presence, and the raw heart of natural aspiration.'
-                  : currentModel.id === 'huracan'
-                    ? 'A super sports car inspired by the racing heritage of Lamborghini Squadra Corse. Maximum aerodynamics and racing sensations.'
-                    : 'id' in currentModel && currentModel.id === 'gallardo'
-                      ? 'A gorgeous open-top spyder featuring a powerful naturally aspirated V10 and a timeless, sharp Italian design.'
-                      : 'The ultimate super sports utility vehicle, blending the soul of a supercar with the functionality of an SUV.'
-                }
-              </p>
-
-              {/* Quick interactive indicators informing active cycling model */}
-              <div className="flex gap-2.5 mt-8 pointer-events-none">
-                {modelsData.map((_, idx) => (
+          <div className="flex flex-wrap gap-x-8 gap-y-4">
+            {/* MODEL SELECTOR */}
+            <div className="pointer-events-auto flex flex-col gap-2.5">
+              <span className="font-mono text-[9px] tracking-[0.3em] text-gray-500 uppercase">Select Model</span>
+              <div className="flex flex-wrap gap-1.5">
+                {modelsData.map((m, i) => (
                   <button
-                    key={idx}
-                    onClick={() => setActiveModel(idx)}
-                    style={{ pointerEvents: isInteracting ? 'none' : 'auto' }}
-                    className={`h-1 cursor-pointer pointer-events-auto transition-all duration-500 ${activeModel === idx ? 'w-12 bg-lambo-yellow' : 'w-4 bg-gray-700 hover:bg-gray-400'
-                      }`}
-                    aria-label={`Select model ${modelsData[idx].name}`}
-                  />
+                    key={m.id}
+                    onClick={() => setActiveModel(i)}
+                    className={`font-mono text-[10px] tracking-[0.12em] px-3.5 py-2 border transition-all duration-300 cursor-pointer ${
+                      i === activeModel
+                        ? 'bg-lambo-yellow text-black border-lambo-yellow font-bold'
+                        : 'border-white/15 bg-black/30 text-gray-400 hover:text-white hover:border-white/40'
+                    }`}
+                  >
+                    {m.name}
+                  </button>
                 ))}
               </div>
-            </motion.div>
-          </AnimatePresence>
-        </motion.div>
+            </div>
 
-        {/* 2C. PERFORMANCE STATS BLOCK (Bottom Left) */}
-        <motion.div
-          animate={{ opacity: isInteracting ? 0 : 1 }}
-          transition={{ duration: 0.4, ease: "easeInOut" }}
-          style={{ pointerEvents: 'none' }}
-          className="absolute bottom-6 md:bottom-12 left-6 md:left-12 z-10 pointer-events-none"
-        >
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={currentModel.id}
-              variants={statsStagger}
-              initial="initial"
-              animate="animate"
-              className="pointer-events-auto flex flex-row flex-wrap md:flex-nowrap gap-8 md:gap-14 bg-black/25 backdrop-blur-sm p-4 md:p-6 border-l border-white/20"
-            >
-              {/* Stat Block: HP */}
-              <motion.div variants={uiFadeIn} className="flex flex-col items-start min-w-[100px]">
-                <span className="text-[9px] font-mono text-gray-500 tracking-widest uppercase mb-1">
-                  POWER
-                </span>
-                <span className="text-[20px] md:text-[25px] font-display font-medium text-white tracking-tight">
-                  {currentModel.hp}
-                </span>
-                <span className="text-[8px] font-mono text-lambo-yellow/70 tracking-wider">COMBUSTION + ELECTRIC</span>
-              </motion.div>
-
-              {/* Dividing Line decor */}
-              <div className="hidden md:block w-px h-10 bg-gray-800 self-center" />
-
-              {/* Stat Block: 0-100 KM/H */}
-              <motion.div variants={uiFadeIn} className="flex flex-col items-start min-w-[100px]">
-                <span className="text-[9px] font-mono text-gray-500 tracking-widest uppercase mb-1">
-                  0-100 KM/H
-                </span>
-                <span className="text-[20px] md:text-[25px] font-display font-medium text-white tracking-tight">
-                  {currentModel.zeroToSixty}
-                </span>
-                <span className="text-[8px] font-mono text-lambo-yellow/70 tracking-wider font-light">INSTANT TORQUE DELIV</span>
-              </motion.div>
-
-              {/* Dividing Line decor */}
-              <div className="hidden md:block w-px h-10 bg-gray-800 self-center" />
-
-              {/* Stat Block: SPEED */}
-              <motion.div variants={uiFadeIn} className="flex flex-col items-start min-w-[100px]">
-                <span className="text-[9px] font-mono text-gray-500 tracking-widest uppercase mb-1">
-                  MAX SPEED
-                </span>
-                <span className="text-[20px] md:text-[25px] font-display font-medium text-white tracking-tight">
-                  &gt;{currentModel.topSpeed}
-                </span>
-                <span className="text-[8px] font-mono text-lambo-yellow/70 tracking-wider">ELECTRONIC LIMITER</span>
-              </motion.div>
-            </motion.div>
-          </AnimatePresence>
-        </motion.div>
-
-        {/* 2D. CUSTOMIZER CONTROLS (Bottom Right) */}
-        <motion.section
-          animate={{ opacity: isInteracting ? 0 : 1 }}
-          transition={{ duration: 0.4, ease: "easeInOut" }}
-          style={{ pointerEvents: 'none' }}
-          className="absolute bottom-6 md:bottom-12 right-6 md:right-12 pointer-events-none flex flex-col items-end gap-6 md:gap-7 z-25"
-        >
-
-          {/* CAMERA VIEW CONTROL CORES */}
-          <div className="flex flex-col items-end gap-2.5">
-            <span className="text-[8px] font-mono text-gray-500 tracking-[0.3em] uppercase mb-1">
-              CAMERA PERSPECTIVE
-            </span>
-            <div className="flex flex-wrap justify-end gap-2 max-w-xs md:max-w-none">
-              {(['front-3/4', 'side', 'engine', 'interior'] as CameraView[]).map((view) => {
-                const label = view === 'front-3/4' ? 'FRONT' : view === 'side' ? 'PROFILE' : view === 'engine' ? 'BACK VIEW' : 'DETAILS';
-                const isActive = cameraView === view;
-                return (
+            {/* CAMERA VIEWS */}
+            <div className="pointer-events-auto flex flex-col gap-2.5">
+              <span className="font-mono text-[9px] tracking-[0.3em] text-gray-500 uppercase">Camera</span>
+              <div className="flex flex-wrap gap-1.5">
+                {CAMERA_VIEWS.map((v) => (
                   <button
-                    key={view}
-                    onClick={() => setCameraView(view)}
-                    style={{ pointerEvents: isInteracting ? 'none' : 'auto' }}
-                    className={`rounded-full border backdrop-blur-md px-4 py-2 text-[9px] font-mono uppercase tracking-[0.15em] transition-all duration-300 cursor-pointer pointer-events-auto ${isActive
-                        ? 'bg-white text-black border-white font-semibold shadow-lg shadow-white/10'
-                        : 'border-gray-800 bg-black/40 text-gray-400 hover:text-white hover:border-gray-500'
-                      }`}
+                    key={v.id}
+                    onClick={() => setCameraView(v.id)}
+                    className={`font-mono text-[10px] tracking-[0.12em] px-3.5 py-2 border transition-all duration-300 cursor-pointer ${
+                      cameraView === v.id
+                        ? 'bg-white text-black border-white font-bold'
+                        : 'border-white/15 bg-black/30 text-gray-400 hover:text-white hover:border-white/40'
+                    }`}
                   >
-                    {label}
+                    {v.label}
                   </button>
-                );
-              })}
+                ))}
+              </div>
             </div>
           </div>
-
-
-
-        </motion.section>
-
+        </motion.footer>
       </div>
+
+      {/* EDGE NAVIGATION ARROWS */}
+      <motion.button
+        initial={{ opacity: 0 }}
+        animate={isLoaded ? { opacity: 1 } : {}}
+        transition={{ delay: 1.2, duration: 0.6 }}
+        onClick={() => setActiveModel((p) => (p - 1 + modelsData.length) % modelsData.length)}
+        aria-label="Previous model"
+        className="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 z-20 pointer-events-auto p-3 border border-white/15 bg-black/30 backdrop-blur-md text-gray-400 hover:text-lambo-yellow hover:border-lambo-yellow/60 transition-colors cursor-pointer"
+      >
+        <ChevronLeft size={18} />
+      </motion.button>
+      <motion.button
+        initial={{ opacity: 0 }}
+        animate={isLoaded ? { opacity: 1 } : {}}
+        transition={{ delay: 1.2, duration: 0.6 }}
+        onClick={() => setActiveModel((p) => (p + 1) % modelsData.length)}
+        aria-label="Next model"
+        className="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 z-20 pointer-events-auto p-3 border border-white/15 bg-black/30 backdrop-blur-md text-gray-400 hover:text-lambo-yellow hover:border-lambo-yellow/60 transition-colors cursor-pointer"
+      >
+        <ChevronRight size={18} />
+      </motion.button>
     </div>
   );
 }

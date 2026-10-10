@@ -19,5 +19,15 @@ export default defineConfig(() => {
     server: {
       hmr: true,
     },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            three: ['three'],
+            react: ['react', 'react-dom'],
+          },
+        },
+      },
+    },
   };
 });
