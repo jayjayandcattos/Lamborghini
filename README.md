@@ -1,69 +1,70 @@
 # KotseBroom: Automobili Lamborghini Configurator
 
-A high-end, responsive 3D vehicle configurator and performance statistics visualizer for Lamborghini supercars, built using **React 19**, **Three.js**, **React Three Fiber**, and **Tailwind CSS v4**.
+A 3D supercar configurator built to look and feel like an official **three.js example page** — warm
+paper, blueprint grid, hairline rules, a docs sidebar and a live inspector — rather than a generic
+dark-mode "luxury" HUD.
 
 ---
 
 ## 🚀 Key Features
 
-*   **Interactive 3D Engine:** Leverages React Three Fiber (R3F) and `@react-three/drei` for real-time metallic paint reflections and soft contact shadows.
-*   **Dual-Mode Geometry Loader:** Seamlessly detects and loads custom `.glb` vehicle models when placed in the assets directory, or automatically falls back to clean, procedurally generated low-poly geometry.
-*   **Live Customization:** Change chassis colors (Giallo Orion, Verde Mantis, Bianco Monocerus, Nero Nemesis) and trigger smooth UI-driven camera transitions (Profile view, Heart V12 engine perspective, Interior view).
-*   **Fluid Animations:** Smooth entry states and statistics transitions built with `motion` (Framer Motion).
-*   **Modern Premium HUD:** An elegant dark mode interface with glassmorphism overlays showcasing real performance statistics (horsepower, 0–100 km/h acceleration times, top speed).
+- **three.js-style chrome:** a docs sidebar of "examples" that double as scene toggles, an inspector
+  panel with live object/material/camera properties, a syntax-highlighted code readout that rewrites
+  itself from state, and a status bar reporting real FPS / triangle / draw-call counts.
+- **Interactive 3D engine:** React Three Fiber + `@react-three/drei` with a lightformer studio
+  environment, infinite measurement grid, soft contact shadows and orbit/zoom controls.
+- **Real paint tinting:** each GLB's body-paint material is matched by name and re-tinted, so the
+  swatches genuinely repaint the car (and re-tint the whole UI accent).
+- **Scene flags:** wireframe, grid, contact shadows and auto-rotate are all switchable — from the
+  sidebar, the inspector, or the keyboard.
+- **Dual-mode geometry loader:** merges ~1,500 mesh nodes down to a couple dozen draw calls, with a
+  procedural wireframe fallback if a model is missing.
+- **Motion:** GSAP timelines for the preloader, per-character title reveals and panel transitions;
+  AOS for the entrance choreography. Both fully respect `prefers-reduced-motion`.
+- **Export:** the header button downloads the current configuration as JSON.
 
 ---
 
 ## 🛠️ Technical Stack
 
-*   **Framework:** React 19 (TypeScript)
-*   **Build Tool:** Vite 6
-*   **Styling:** Tailwind CSS v4 + `@tailwindcss/vite`
-*   **3D Graphics:** Three.js + React Three Fiber + `@react-three/drei`
-*   **Animations:** Framer Motion (`motion/react`)
-*   **Icons:** Lucide React
+- **Framework:** React 19 (TypeScript)
+- **Build:** Vite 6
+- **Styling:** Tailwind CSS v4 + `@tailwindcss/vite`, custom design tokens in `src/index.css`
+- **3D:** Three.js + React Three Fiber + `@react-three/drei`
+- **Animation:** GSAP 3 + AOS 2
+- **Icons:** Lucide React
+
+---
+
+## ⌨️ Shortcuts
+
+| Key | Action |
+| --- | --- |
+| `←` / `→` | Previous / next chassis |
+| `1` – `4` | Front, profile, rear, interior camera |
+| `W` | Toggle wireframe |
+| `G` | Toggle grid |
+| `R` | Toggle auto-rotate |
+| `Esc` | Close the mobile drawer |
 
 ---
 
 ## 📦 Getting Started
 
-### Prerequisites
-
-*   [Node.js](https://nodejs.org/) (v20+ or v22+ recommended)
-*   [npm](https://www.npmjs.com/) (installed automatically with Node.js)
-
-### Installation
-
-1. Clone or copy this project to your desired directory.
-2. Install the dependencies:
-   ```bash
-   npm install
-   ```
-
-### Running Locally
-
-To run the hot-reloading development server:
 ```bash
-npm run dev
+npm install
+npm run dev      # http://localhost:3000
+npm run build    # production bundle in dist/
+npm run lint     # tsc --noEmit
 ```
-Open your browser and navigate to `http://localhost:3000` (or the port specified in your terminal).
-
-### Building for Production
-
-To compile and optimize the assets for production deployment:
-```bash
-npm run build
-```
-The output files will be generated in the `dist/` directory.
 
 ---
 
 ## 🎨 Asset Customization
 
-To add high-fidelity 3D models:
 1. Create a `public/models/` directory in your workspace root.
-2. Drop your `.glb` vehicle models named exactly as follows:
-   *   `revuelto.glb` (Lamborghini Revuelto)
-   *   `huracan.glb` (Lamborghini Huracán STO)
-   *   `aventador.glb` (Lamborghini Aventador SVJ)
-3. For details on mapping paint colors to meshes in your GLB, refer to the [GLB Model Integration Guide](GLB_INTEGRATION.md).
+2. Drop your `.glb` vehicle models in, named exactly:
+   - `aventador.glb`, `huracan.glb`, `gallardo.glb`, `urus.glb`
+3. Add a matching entry to `src/data/models.ts`. The `paintMaterial` field is the substring used to
+   find the body-paint material inside the GLB (for example `2020Paint_Material`), and
+   `paintRoughness` / `paintMetalness` are applied to it on selection.

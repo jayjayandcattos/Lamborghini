@@ -1,4 +1,4 @@
-import { useRef, useMemo, useEffect, useLayoutEffect, Suspense } from 'react';
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, useGLTF } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
@@ -8,7 +8,7 @@ import { modelsData } from '../data/models';
 import type { CameraView } from '../types';
 
 const TAU = Math.PI * 2;
-const HERO_VIEW = 'front-3/4';
+const HERO_VIEW: CameraView = 'front-3/4';
 const BASE_FOV = 38;
 const MIN_RADIUS = 1.6;
 const MAX_RADIUS = 13;
@@ -30,35 +30,52 @@ function dampAngle(current: number, target: number, lambda: number, delta: numbe
   return current + diff * (1 - Math.exp(-lambda * delta));
 }
 
-const CAMERA_VIEWS: Record<CameraView, { position: [number, number, number]; lookAt: [number, number, number] }> = {
-  'front-3/4': { position: [5.6, 0.85, 4.2], lookAt: [0, 0.45, 0] },
-  side: { position: [6.9, 0.55, 0.7], lookAt: [0, 0.4, 0] },
-  engine: { position: [-3.4, 2.4, -4.9], lookAt: [0, 0.6, -0.5] },
-  interior: { position: [0.55, 1.02, 0.4], lookAt: [0, 0.85, -1.6] },
+const CAMERA_VIEWS: Record<
+  CameraView,
+  { position: [number, number, number]; lookAt: [number, number, number] }
+> = {
+  'front-3/4': { position: [6.15, 0.98, 4.62], lookAt: [0, 0.45, 0] },
+  side: { position: [7.2, 0.6, 0.7], lookAt: [0, 0.4, 0] },
+  engine: { position: [-3.6, 2.5, -5.0], lookAt: [0, 0.6, -0.5] },
+  interior: { position: [0.5, 1.0, 0.38], lookAt: [0, 0.82, -1.5] },
 };
 
-interface CarModelProps {
+interface GLTFAssetProps {
+  url: string;
   modelId: string;
-  color: string;
-  cameraView: CameraView;
-  onInteractionChange?: (isInteracting: boolean) => void;
+  paint: string;
+  paintMaterial: string;
+  paintRoughness: number;
+  paintMetalness: number;
+  wireframe: boolean;
+  onGeometryStats?: (tris: number, calls: number) => void;
 }
 
-function GLTFAsset({ url, modelId }: { url: string; modelId: string }) {
+function GLTFAsset({
+  url,
+  modelId,
+  paint,
+  paintMaterial,
+  paintRoughness,
+  paintMetalness,
+  wireframe,
+  onGeometryStats,
+}: GLTFAssetProps) {
   const { scene: originalScene } = useGLTF(url);
-  const { gl } = useThree();
 
-  const { root, ownedGeometries } = useMemo(() => {
+  const { root, materials, paintMaterials, tris, calls } = useMemo(() => {
     const cloned = originalScene.clone(true);
     cloned.updateMatrixWorld(true);
 
+    // Group every mesh by material so the ~1.5k nodes collapse into a couple
+    // of dozen draw calls before anything hits the GPU.
     const byMaterial = new Map<THREE.Material, THREE.BufferGeometry[]>();
-    const owned = new Set<THREE.BufferGeometry>();
 
     cloned.traverse((child: THREE.Object3D) => {
       const mesh = child as THREE.Mesh;
       if (!mesh.isMesh) return;
       const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+      if (!material) return;
       const geo = mesh.geometry.clone();
       geo.applyMatrix4(mesh.matrixWorld);
       const list = byMaterial.get(material) ?? [];
@@ -67,6 +84,11 @@ function GLTFAsset({ url, modelId }: { url: string; modelId: string }) {
     });
 
     const merged = new THREE.Group();
+    const ownedMaterials: THREE.Material[] = [];
+    const paintMats: THREE.MeshStandardMaterial[] = [];
+    let triangles = 0;
+    let drawCalls = 0;
+
     for (const [material, geoms] of byMaterial) {
       const common = [...new Set(Object.keys(geoms[0].attributes))].filter((name) =>
         geoms.every((g) => g.attributes[name] !== undefined),
@@ -83,10 +105,22 @@ function GLTFAsset({ url, modelId }: { url: string; modelId: string }) {
         : normalized.map((g) => (g.index ? g.toNonIndexed() : g));
       const mergedGeo = mergeGeometries(compatible, false);
       if (!mergedGeo) continue;
-      owned.add(mergedGeo);
-      const mesh = new THREE.Mesh(mergedGeo, material);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
+
+      triangles +=
+        (mergedGeo.index ? mergedGeo.index.count : mergedGeo.attributes.position.count) / 3;
+      drawCalls += 1;
+
+      // Every material is cloned so paint + wireframe can be applied without
+      // mutating the cached GLTF asset shared across model switches.
+      const mat = material.clone() as THREE.MeshStandardMaterial;
+      ownedMaterials.push(mat);
+
+      if (mat.name && mat.name.includes(paintMaterial)) {
+        paintMats.push(mat);
+        mat.envMapIntensity = 1.35;
+      }
+
+      const mesh = new THREE.Mesh(mergedGeo, mat);
       merged.add(mesh);
     }
 
@@ -96,7 +130,7 @@ function GLTFAsset({ url, modelId }: { url: string; modelId: string }) {
     const center = new THREE.Vector3();
     box.getSize(size);
     box.getCenter(center);
-    const targetLength = modelId === 'urus' ? 5.1 : 4.6;
+    const targetLength = modelId === 'urus' ? 5.1 : 4.9;
     const factor = targetLength / (Math.max(size.x, size.y, size.z) || 1);
 
     const wrapper = new THREE.Group();
@@ -104,14 +138,46 @@ function GLTFAsset({ url, modelId }: { url: string; modelId: string }) {
     wrapper.position.set(-center.x * factor, -box.min.y * factor, -center.z * factor);
     wrapper.add(measure);
 
-    return { root: wrapper, ownedGeometries: owned };
-  }, [originalScene, modelId]);
+    return {
+      root: wrapper,
+      materials: ownedMaterials,
+      paintMaterials: paintMats,
+      tris: Math.round(triangles),
+      calls: drawCalls,
+    };
+  }, [originalScene, modelId, paintMaterial]);
+
+  useEffect(() => {
+    onGeometryStats?.(tris, calls);
+  }, [onGeometryStats, tris, calls]);
 
   useEffect(() => {
     return () => {
-      ownedGeometries.forEach((g) => g.dispose());
+      materials.forEach((m) => m.dispose());
+      root.traverse((child) => {
+        const mesh = child as THREE.Mesh;
+        if (mesh.isMesh) mesh.geometry.dispose();
+      });
     };
-  }, [ownedGeometries]);
+  }, [materials, root]);
+
+  useEffect(() => {
+    paintMaterials.forEach((m) => {
+      m.color.set(paint);
+      m.roughness = paintRoughness;
+      m.metalness = paintMetalness;
+      m.needsUpdate = true;
+    });
+  }, [paintMaterials, paint, paintRoughness, paintMetalness]);
+
+  useEffect(() => {
+    materials.forEach((m) => {
+      if ('wireframe' in m) {
+        (m as THREE.MeshStandardMaterial).wireframe = wireframe;
+        m.needsUpdate = true;
+      }
+    });
+  }, [materials, wireframe]);
 
   const assetRef = useRef<THREE.Group>(null);
   const startedAt = useRef<number | null>(null);
@@ -122,15 +188,13 @@ function GLTFAsset({ url, modelId }: { url: string; modelId: string }) {
 
     if (startedAt.current === null) startedAt.current = clock.elapsedTime;
     const t = clock.elapsedTime - startedAt.current;
-    const p = clamp01(t / 1.8);
+    const p = clamp01(t / 1.6);
     const eased = easeOutCubic(p);
 
-    const scale = 0.58 + 0.42 * Math.min(1.08, easeOutBack(p));
+    const scale = 0.62 + 0.38 * Math.min(1.06, easeOutBack(p));
     g.scale.setScalar(scale);
-    g.rotation.y = TAU * 1.75 * (1 - eased);
-    g.position.y = (1 - eased) * 2.4 - Math.sin(clamp01((t - 1.4) / 0.55) * Math.PI) * 0.055;
-
-    if (p < 1) gl.shadowMap.needsUpdate = true;
+    g.rotation.y = TAU * 1.25 * (1 - eased);
+    g.position.y = (1 - eased) * 1.6 - Math.sin(clamp01((t - 1.2) / 0.5) * Math.PI) * 0.04;
   });
 
   return (
@@ -140,24 +204,45 @@ function GLTFAsset({ url, modelId }: { url: string; modelId: string }) {
   );
 }
 
-export function CarModel({ modelId, color, cameraView, onInteractionChange }: CarModelProps) {
+interface CarModelProps {
+  modelId: string;
+  paint: string;
+  paintMaterial: string;
+  paintRoughness: number;
+  paintMetalness: number;
+  view: CameraView;
+  wireframe: boolean;
+  autoRotate: boolean;
+  onInteractionChange?: (isInteracting: boolean) => void;
+  onGeometryStats?: (tris: number, calls: number) => void;
+}
+
+export function CarModel({
+  modelId,
+  paint,
+  paintMaterial,
+  paintRoughness,
+  paintMetalness,
+  view,
+  wireframe,
+  autoRotate,
+  onInteractionChange,
+  onGeometryStats,
+}: CarModelProps) {
   const groupRef = useRef<THREE.Group>(null);
   const orbitRef = useRef<OrbitControlsImpl>(null);
   const glowRef = useRef<THREE.PointLight>(null);
-  const rimRef = useRef<THREE.DirectionalLight>(null);
   const shouldLerp = useRef(true);
   const dragging = useRef(false);
   const idleFor = useRef(0);
   const angle = useRef(0);
-  const introStart = useRef(0);
   const introPending = useRef(true);
   const zoomTarget = useRef(6);
   const zoomValue = useRef(6);
-  const zoomVelocity = useRef(0);
-  const glow = useMemo(() => new THREE.Color(color), [color]);
+  const glow = useMemo(() => new THREE.Color(paint), [paint]);
 
   const { camera, gl, size } = useThree();
-  const shift = size.width >= 1024 ? Math.min(size.width * 0.15, 200) : 0;
+  const shift = size.width >= 720 ? Math.min(size.width * 0.16, 190) : 0;
 
   useLayoutEffect(() => {
     const cam = camera as THREE.PerspectiveCamera;
@@ -187,7 +272,7 @@ export function CarModel({ modelId, color, cameraView, onInteractionChange }: Ca
     idleFor.current = 0;
     introPending.current = true;
     onInteractionChange?.(true);
-  }, [cameraView, modelId, onInteractionChange]);
+  }, [view, modelId, onInteractionChange]);
 
   useEffect(() => {
     const element = gl.domElement;
@@ -244,15 +329,18 @@ export function CarModel({ modelId, color, cameraView, onInteractionChange }: Ca
     };
   }, [gl]);
 
-  useFrame((state, delta) => {
+  useFrame((state, rawDelta) => {
     const g = groupRef.current;
     if (!g) return;
+
+    // Cap the timestep: a stalled tab (or a very slow frame) would otherwise
+    // let the camera smoothing overshoot catastrophically.
+    const delta = Math.min(rawDelta, 1 / 30);
 
     const cam = state.camera;
     const t = state.clock.elapsedTime;
 
     if (introPending.current) {
-      introStart.current = t;
       introPending.current = false;
     }
 
@@ -260,37 +348,63 @@ export function CarModel({ modelId, color, cameraView, onInteractionChange }: Ca
     if (dragging.current) idleFor.current = 0;
 
     if (shouldLerp.current && !dragging.current) {
-      const view = CAMERA_VIEWS[cameraView] ?? CAMERA_VIEWS[HERO_VIEW];
+      const preset = CAMERA_VIEWS[view] ?? CAMERA_VIEWS[HERO_VIEW];
       const lambda = 5;
-      const presetRadius = Math.hypot(
-        view.position[0] - view.lookAt[0],
-        view.position[1] - view.lookAt[1],
-        view.position[2] - view.lookAt[2],
+
+      // Portrait viewports are much narrower than the preset framing assumes,
+      // so pull the camera back proportionally to keep the whole body in frame.
+      const aspect = size.width / Math.max(size.height, 1);
+      const fit =
+        aspect < 1.1 ? THREE.MathUtils.clamp(1.1 / Math.max(aspect, 0.55), 1, 1.62) : 1;
+
+      const target: [number, number, number] = [
+        preset.lookAt[0] + (preset.position[0] - preset.lookAt[0]) * fit,
+        preset.lookAt[1] + (preset.position[1] - preset.lookAt[1]) * fit,
+        preset.lookAt[2] + (preset.position[2] - preset.lookAt[2]) * fit,
+      ];
+
+      zoomTarget.current = Math.hypot(
+        target[0] - preset.lookAt[0],
+        target[1] - preset.lookAt[1],
+        target[2] - preset.lookAt[2],
       );
 
-      zoomTarget.current = presetRadius;
-
-      cam.position.x = THREE.MathUtils.damp(cam.position.x, view.position[0], lambda, delta);
-      cam.position.y = THREE.MathUtils.damp(cam.position.y, view.position[1], lambda, delta);
-      cam.position.z = THREE.MathUtils.damp(cam.position.z, view.position[2], lambda, delta);
+      cam.position.x = THREE.MathUtils.damp(cam.position.x, target[0], lambda, delta);
+      cam.position.y = THREE.MathUtils.damp(cam.position.y, target[1], lambda, delta);
+      cam.position.z = THREE.MathUtils.damp(cam.position.z, target[2], lambda, delta);
 
       if (orbitRef.current) {
-        orbitRef.current.target.x = THREE.MathUtils.damp(orbitRef.current.target.x, view.lookAt[0], lambda, delta);
-        orbitRef.current.target.y = THREE.MathUtils.damp(orbitRef.current.target.y, view.lookAt[1], lambda, delta);
-        orbitRef.current.target.z = THREE.MathUtils.damp(orbitRef.current.target.z, view.lookAt[2], lambda, delta);
+        orbitRef.current.target.x = THREE.MathUtils.damp(
+          orbitRef.current.target.x,
+          preset.lookAt[0],
+          lambda,
+          delta,
+        );
+        orbitRef.current.target.y = THREE.MathUtils.damp(
+          orbitRef.current.target.y,
+          preset.lookAt[1],
+          lambda,
+          delta,
+        );
+        orbitRef.current.target.z = THREE.MathUtils.damp(
+          orbitRef.current.target.z,
+          preset.lookAt[2],
+          lambda,
+          delta,
+        );
         orbitRef.current.update();
       } else {
-        cam.lookAt(view.lookAt[0], view.lookAt[1], view.lookAt[2]);
+        cam.lookAt(preset.lookAt[0], preset.lookAt[1], preset.lookAt[2]);
       }
 
-      const dx = cam.position.x - view.position[0];
-      const dy = cam.position.y - view.position[1];
-      const dz = cam.position.z - view.position[2];
+      const dx = cam.position.x - target[0];
+      const dy = cam.position.y - target[1];
+      const dz = cam.position.z - target[2];
       if (Math.sqrt(dx * dx + dy * dy + dz * dz) < 0.04) {
         shouldLerp.current = false;
-        cam.position.set(view.position[0], view.position[1], view.position[2]);
+        cam.position.set(target[0], target[1], target[2]);
         if (orbitRef.current) {
-          orbitRef.current.target.set(view.lookAt[0], view.lookAt[1], view.lookAt[2]);
+          orbitRef.current.target.set(preset.lookAt[0], preset.lookAt[1], preset.lookAt[2]);
           orbitRef.current.update();
         }
         onInteractionChange?.(false);
@@ -302,20 +416,9 @@ export function CarModel({ modelId, color, cameraView, onInteractionChange }: Ca
 
     if (shouldLerp.current) {
       zoomValue.current = distance;
-      zoomVelocity.current = 0;
     } else {
-      const omega = 7;
-      const accel = omega * omega * (zoomTarget.current - zoomValue.current) - 2 * omega * zoomVelocity.current;
-      zoomVelocity.current += accel * delta;
-      zoomValue.current += zoomVelocity.current * delta;
-
-      if (zoomValue.current < MIN_RADIUS) {
-        zoomValue.current = MIN_RADIUS;
-        zoomVelocity.current = Math.max(0, zoomVelocity.current);
-      } else if (zoomValue.current > MAX_RADIUS) {
-        zoomValue.current = MAX_RADIUS;
-        zoomVelocity.current = Math.min(0, zoomVelocity.current);
-      }
+      zoomTarget.current = THREE.MathUtils.clamp(zoomTarget.current, MIN_RADIUS, MAX_RADIUS);
+      zoomValue.current = THREE.MathUtils.damp(zoomValue.current, zoomTarget.current, 6, delta);
 
       if (Math.abs(zoomValue.current - distance) > 0.0005 && distance > 0.0001) {
         const scale = zoomValue.current / distance;
@@ -327,61 +430,53 @@ export function CarModel({ modelId, color, cameraView, onInteractionChange }: Ca
       }
     }
 
-    const isHero = cameraView === HERO_VIEW;
+    const isHero = view === HERO_VIEW;
 
-    if (isHero && !dragging.current && idleFor.current > 1.4) {
+    if (autoRotate && !dragging.current && idleFor.current > 1.2) {
       angle.current += delta * 0.13;
     } else {
       angle.current = dampAngle(angle.current, 0, 2.2, delta);
     }
 
     g.rotation.y = angle.current;
-    g.position.y = Math.sin(t * 0.55) * 0.022;
-    g.rotation.z = Math.sin(t * 0.37) * 0.007;
-    g.rotation.x = Math.sin(t * 0.29 + 1.2) * 0.005;
+    g.position.y = Math.sin(t * 0.55) * 0.018;
+    g.rotation.z = Math.sin(t * 0.37) * 0.006;
 
     const perspective = cam as THREE.PerspectiveCamera;
-    const settling = isHero && idleFor.current > 1.4;
-    const targetFov = settling ? BASE_FOV + Math.sin(t * 0.28) * 0.9 : BASE_FOV;
+    const settling = isHero && autoRotate && idleFor.current > 1.2;
+    const targetFov = settling ? BASE_FOV + Math.sin(t * 0.28) * 0.8 : BASE_FOV;
     if (Math.abs(perspective.fov - targetFov) > 0.002) {
       perspective.fov = THREE.MathUtils.damp(perspective.fov, targetFov, 2, delta);
       perspective.updateProjectionMatrix();
     }
 
-    const idleBoost = idleFor.current > 1.4 ? 1 : 0;
-    const flash = Math.max(0, 1 - (t - introStart.current) / 1.2) ** 2;
-
     if (glowRef.current) {
-      glowRef.current.intensity = 3.2 + Math.sin(t * 1.1) * 0.9 + idleBoost * 1.6 + flash;
-    }
-
-    if (rimRef.current) {
-      const orbit = t * 0.16;
-      rimRef.current.position.set(Math.cos(orbit) * 7, 3.4, Math.sin(orbit) * 7);
-      rimRef.current.intensity = 0.6 + Math.sin(t * 0.5) * 0.25 + idleBoost * 0.35 + flash * 1.5;
+      glowRef.current.intensity = 1.1 + Math.sin(t * 1.1) * 0.25;
     }
   });
 
   return (
     <group ref={groupRef}>
-      <pointLight
-        ref={glowRef}
-        position={[0, 0.15, 0]}
-        intensity={4}
-        distance={6}
-        decay={2}
-        color={glow}
-      />
-      <directionalLight ref={rimRef} position={[5, 3, 5]} intensity={0.8} color={glow} />
+      <pointLight ref={glowRef} position={[0, 0.12, 0]} intensity={1.1} distance={5} decay={2} color={glow} />
       <Suspense
         fallback={
-          <mesh>
-            <icosahedronGeometry args={[0.5, 0]} />
-            <meshBasicMaterial color="#FFB300" wireframe />
+          <mesh position={[0, 0.4, 0]}>
+            <boxGeometry args={[0.9, 0.35, 1.9]} />
+            <meshBasicMaterial color="#b9b7ac" wireframe />
           </mesh>
         }
       >
-        <GLTFAsset key={modelId} url={`/models/${modelId}.glb`} modelId={modelId} />
+        <GLTFAsset
+          key={modelId}
+          url={`/models/${modelId}.glb`}
+          modelId={modelId}
+          paint={paint}
+          paintMaterial={paintMaterial}
+          paintRoughness={paintRoughness}
+          paintMetalness={paintMetalness}
+          wireframe={wireframe}
+          onGeometryStats={onGeometryStats}
+        />
       </Suspense>
       <OrbitControls
         ref={orbitRef}
@@ -393,7 +488,6 @@ export function CarModel({ modelId, color, cameraView, onInteractionChange }: Ca
         enableZoom={false}
         enablePan={false}
         rotateSpeed={0.55}
-        zoomSpeed={0.6}
         minDistance={0.6}
         maxDistance={11}
         onStart={() => {
